@@ -1,0 +1,14 @@
+/Archive/
+/backups/
+/reference-projects/
+/verification/
+/build/
+/checks/*.exe
+/IMPLEMENTATION-PLAN.md
+/IMPLEMENTATION-PROMPT.md
+.vs/
+*.user
+*.suo
+auth.json
+.env
+.env.*
