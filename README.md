@@ -130,76 +130,38 @@ Subscription until: 31.01.2030 23:59
 
 Используются C# 5, Windows Forms и системный компилятор .NET Framework. Установка NuGet-пакетов не требуется.
 
-Откройте PowerShell в каталоге с `CodexUsageTray.cs`, `THIRD-PARTY-NOTICES.txt` и папкой `checks`, затем выполните:
+Из корня проекта запустите единый build runner:
 
 ```powershell
-$ErrorActionPreference = 'Stop'
-$projectRoot = (Get-Location).Path
-$csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-$source = Join-Path $projectRoot 'CodexUsageTray.cs'
-$checks = Join-Path $projectRoot 'checks\SelfCheck.cs'
-$notices = Join-Path $projectRoot 'THIRD-PARTY-NOTICES.txt'
-
-foreach ($file in @($csc, $source, $checks, $notices)) {
-    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
-        throw "Required file not found: $file"
-    }
-}
-
-$buildDir = [IO.Path]::GetFullPath((Join-Path $projectRoot 'build'))
-if (-not $buildDir.StartsWith($projectRoot + '\', [StringComparison]::OrdinalIgnoreCase)) {
-    throw 'Build directory must be inside the project'
-}
-New-Item -ItemType Directory -Path $buildDir -Force | Out-Null
-
-$common = @(
-    '/nologo', '/langversion:5', '/platform:x64', '/optimize+',
-    '/warn:4', '/warnaserror+', '/utf8output',
-    '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll',
-    '/r:System.Web.Extensions.dll',
-    "/resource:$notices,CodexUsageTray.ThirdPartyNotices"
-)
-
-& $csc @common /target:winexe /main:CodexUsageTray.Program `
-    "/out:$buildDir\CodexUsageTray.exe" $source
-if ($LASTEXITCODE -ne 0) { throw 'Product build failed' }
-
-& $csc @common /target:exe /main:CodexUsageTray.SelfCheck `
-    "/out:$buildDir\SelfCheck.exe" $source $checks
-if ($LASTEXITCODE -ne 0) { throw 'SelfCheck build failed' }
+.\Check-Local.ps1
 ```
 
 Готовые файлы появятся в папке `build`. Для запуска программы нужен только `build\CodexUsageTray.exe`. Перед запуском новой сборки закройте предыдущий экземпляр через меню выхода.
 
 ## Проверки
 
-Из корня проекта после сборки:
+Перед каждым push в `main` или `master` обязателен полный локальный gate из корня проекта:
 
 ```powershell
-# Parser, percentages, tray icon, layout and language selection
-& '.\build\SelfCheck.exe'
+.\Check-Local.ps1
+```
 
-# Synthetic CLI responses, errors, timeouts and process cleanup
-& '.\build\SelfCheck.exe' '--integration-check'
+Скрипт собирает программу и SelfCheck системным компилятором .NET Framework, затем выполняет быстрый parser SelfCheck и offline-интеграционные сценарии `CodexReader`. GitHub Actions не используются.
 
-# Real Codex connection; uses the saved sign-in
+Ручные проверки запускайте только при изменении соответствующего критического сценария:
+
+```powershell
+# Реальный app-server, сохранённый вход Codex и cleanup дочернего процесса
 & '.\build\SelfCheck.exe' '--live-check'
 
-# Briefly shows a small card; checks reopening and Escape
-& '.\build\SelfCheck.exe' '--reopen-check'
+# Трей, наведение, карточка и Escape; нужен интерактивный desktop
+& '.\build\SelfCheck.exe' '--ui-check'
+
+# --with-codex, значок в трее и повторный запуск; активирует Codex
+& '.\build\SelfCheck.exe' '--joint-launch-check'
 ```
 
-Для проверки общего запуска создайте новую папку результатов и выполните:
-
-```powershell
-$launchCheckDir = Join-Path (Get-Location).Path ('verification\joint-launch-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
-New-Item -ItemType Directory -Path $launchCheckDir | Out-Null
-& '.\build\SelfCheck.exe' '--joint-launch-check' $launchCheckDir
-```
-
-Эта проверка открывает настольный Codex, проверяет появление значка в трее, повторный запуск без второго индикатора и корректное завершение проверяемой утилиты.
-
-Проверка возвращает код `0` при успехе и `1` при ошибке. Результаты реального UI-прогона получены на Windows 11 при масштабе 100% и светлой теме. Несколько мониторов, реальная тёмная тема и повышенный масштаб не проверялись в этом прогоне. Вид рамки и скруглений зависит от версии и настроек Windows.
+Live-check требует установленного Codex, выполненного входа и доступа к сервису. UI и joint-launch требуют интерактивного desktop; joint-launch активирует настольный Codex. Эти сценарии не входят в обязательный локальный gate и не запускаются при каждом push.
 
 ## Сообщения об ошибках и участие
 
