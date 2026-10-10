@@ -3,7 +3,8 @@
 /reference-projects/
 /verification/
 /build/
-/checks/*.exe
+/dist/
+*.exe
 .vs/
 *.user
 *.suo
@@ -11,4 +12,5 @@ auth.json
 .env
 .env.*
 /.ssh/
-/docs/
+/docs/*
+!/docs/BUILDING.md
